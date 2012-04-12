@@ -64,23 +64,23 @@ public class CoffeePlugin extends PlayPlugin {
         cache = new HashMap<String, CompiledCoffee>();
 
         if (Play.mode == Play.Mode.PROD) {
-			Logger.info("Compiling coffee scripts...");
-			String[] extensions = new String[] { "coffee" };
-			int count = 0;
-			List<File> coffeeFiles = (List<File>) FileUtils.listFiles(Play.getFile("public/javascripts"), extensions, true);
-			for (File coffeeFile : coffeeFiles) {
-				String relativePath = coffeeFile.getAbsolutePath().replace(Play.applicationPath.getAbsolutePath(), "");
-				count++;
-				String compiledCoffee;
-				try {
-					compiledCoffee = getCompiler().compile(IO.readContentAsString(coffeeFile));
-					cache.put(relativePath, new CompiledCoffee(coffeeFile.lastModified(), compiledCoffee));
-					Logger.info("%s compiled.");
-				} catch (JCoffeeScriptCompileException e) {
-					Logger.error("%s failed to compile.", relativePath);
-				}
-			}
-			Logger.info("Done. %d files compiled.", count);
+            Logger.info("Compiling coffee scripts...");
+            String[] extensions = new String[] { "coffee" };
+            int count = 0;
+            List<File> coffeeFiles = (List<File>) FileUtils.listFiles(Play.getFile("public/javascripts"), extensions, true);
+            for (File coffeeFile : coffeeFiles) {
+                String relativePath = coffeeFile.getAbsolutePath().replace(Play.applicationPath.getAbsolutePath(), "");
+                count++;
+                String compiledCoffee;
+                try {
+                    compiledCoffee = getCompiler().compile(IO.readContentAsString(coffeeFile));
+                    cache.put(relativePath, new CompiledCoffee(coffeeFile.lastModified(), compiledCoffee));
+                    Logger.info("%s compiled.");
+                } catch (JCoffeeScriptCompileException e) {
+                    Logger.error("%s failed to compile.", relativePath);
+                }
+            }
+            Logger.info("Done. %d files compiled.", count);
         }
     }
 
@@ -91,11 +91,11 @@ public class CoffeePlugin extends PlayPlugin {
         }
 
         try {
-			response.contentType = "text/javascript";
-			response.status = 200;
-			if (Play.mode == Play.Mode.PROD) {
-				response.cacheFor("1h");
-			}
+            response.contentType = "text/javascript";
+            response.status = 200;
+            if (Play.mode == Play.Mode.PROD) {
+                response.cacheFor("1h");
+            }
 
             // Check the cache.
             String relativePath = file.relativePath();
