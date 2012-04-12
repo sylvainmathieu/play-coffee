@@ -75,7 +75,7 @@ public class CoffeePlugin extends PlayPlugin {
                 try {
                     compiledCoffee = getCompiler().compile(IO.readContentAsString(coffeeFile));
                     cache.put(relativePath, new CompiledCoffee(coffeeFile.lastModified(), compiledCoffee));
-                    Logger.info("%s compiled.");
+                    Logger.info("%s compiled.", relativePath);
                 } catch (JCoffeeScriptCompileException e) {
                     Logger.error("%s failed to compile.", relativePath);
                 }
