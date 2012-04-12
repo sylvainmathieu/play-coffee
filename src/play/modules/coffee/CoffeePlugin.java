@@ -1,16 +1,21 @@
 package play.modules.coffee;
 
-import org.jcoffeescript.JCoffeeScriptCompileException;
-import org.jcoffeescript.JCoffeeScriptCompiler;
-
+import java.io.File;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import org.apache.commons.io.FileUtils;
+import org.jcoffeescript.JCoffeeScriptCompileException;
+import org.jcoffeescript.JCoffeeScriptCompiler;
+
+import play.Logger;
 import play.Play;
 import play.PlayPlugin;
 import play.exceptions.CompilationException;
+import play.libs.IO;
 import play.mvc.Http.Request;
 import play.mvc.Http.Response;
 import play.templates.Template;
@@ -57,6 +62,26 @@ public class CoffeePlugin extends PlayPlugin {
     @Override
     public void onLoad() {
         cache = new HashMap<String, CompiledCoffee>();
+
+        if (Play.mode == Play.Mode.PROD) {
+			Logger.info("Compiling coffee scripts...");
+			String[] extensions = new String[] { "coffee" };
+			int count = 0;
+			List<File> coffeeFiles = (List<File>) FileUtils.listFiles(Play.getFile("public/javascripts"), extensions, true);
+			for (File coffeeFile : coffeeFiles) {
+				String relativePath = coffeeFile.getAbsolutePath().replace(Play.applicationPath.getAbsolutePath(), "");
+				count++;
+				String compiledCoffee;
+				try {
+					compiledCoffee = getCompiler().compile(IO.readContentAsString(coffeeFile));
+					cache.put(relativePath, new CompiledCoffee(coffeeFile.lastModified(), compiledCoffee));
+					Logger.info("%s compiled.");
+				} catch (JCoffeeScriptCompileException e) {
+					Logger.error("%s failed to compile.", relativePath);
+				}
+			}
+			Logger.info("Done. %d files compiled.", count);
+        }
     }
 
     @Override
@@ -66,11 +91,11 @@ public class CoffeePlugin extends PlayPlugin {
         }
 
         try {
-            response.contentType = "text/javascript";
-            response.status = 200;
-            if (Play.mode == Play.Mode.PROD) {
-                response.cacheFor("1h");
-            }
+			response.contentType = "text/javascript";
+			response.status = 200;
+			if (Play.mode == Play.Mode.PROD) {
+				response.cacheFor("1h");
+			}
 
             // Check the cache.
             String relativePath = file.relativePath();
@@ -84,6 +109,7 @@ public class CoffeePlugin extends PlayPlugin {
             String compiledCoffee = getCompiler().compile(file.contentAsString());
             cache.put(relativePath, new CompiledCoffee(file.lastModified(), compiledCoffee));
             response.print(compiledCoffee);
+
         } catch (JCoffeeScriptCompileException e) {
             // Render a nice error page.
             Template tmpl = TemplateLoader.load("errors/500.html");
@@ -95,6 +121,7 @@ public class CoffeePlugin extends PlayPlugin {
             response.status = 500;
             response.print(tmpl.render(args));
         }
+
         return true;
     }
 }
