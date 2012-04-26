@@ -1,6 +1,9 @@
 package play.modules.coffee;
 
+import java.io.BufferedReader;
 import java.io.File;
+import java.io.IOException;
+import java.io.InputStreamReader;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -59,6 +62,43 @@ public class CoffeePlugin extends PlayPlugin {
         return compiler.get();
     }
 
+    private String compileCoffee(File coffeeFile) throws JCoffeeScriptCompileException {
+        String compiledCoffee = "";
+        String coffeeNativeFullpath = Play.configuration.getProperty("coffee.native", "");
+        if (!coffeeNativeFullpath.isEmpty()) {
+            String[] command = { coffeeNativeFullpath, "-p", coffeeFile.getAbsolutePath() };
+            ProcessBuilder pb = new ProcessBuilder(command);
+            Process coffeeProcess = null;
+            try {
+                coffeeProcess = pb.start();
+                BufferedReader compiledReader = new BufferedReader(new InputStreamReader(coffeeProcess.getInputStream()));
+                String line;
+                while ((line = compiledReader.readLine()) != null) {
+					compiledCoffee += line + "\n";
+                }
+				String coffeeErrors = "";
+				BufferedReader errorReader = new BufferedReader(new InputStreamReader(coffeeProcess.getErrorStream()));
+				while ((line = errorReader.readLine()) != null) {
+					coffeeErrors += line + "\n";
+				}
+				if (!coffeeErrors.isEmpty()) {
+					Logger.error("%s", coffeeErrors);
+				}
+                compiledReader.close();
+            } catch (IOException e) {
+                e.printStackTrace();
+            } finally {
+                if (coffeeProcess != null) {
+                    coffeeProcess.destroy();
+                }
+            }
+        }
+        else {
+            compiledCoffee = getCompiler().compile(IO.readContentAsString(coffeeFile));
+        }
+        return compiledCoffee;
+    }
+
     @Override
     public void onLoad() {
         cache = new HashMap<String, CompiledCoffee>();
@@ -71,14 +111,13 @@ public class CoffeePlugin extends PlayPlugin {
             for (File coffeeFile : coffeeFiles) {
                 String relativePath = coffeeFile.getAbsolutePath().replace(Play.applicationPath.getAbsolutePath(), "");
                 count++;
-                String compiledCoffee;
                 try {
-                    compiledCoffee = getCompiler().compile(IO.readContentAsString(coffeeFile));
+                    String compiledCoffee = compileCoffee(coffeeFile);
                     cache.put(relativePath, new CompiledCoffee(coffeeFile.lastModified(), compiledCoffee));
-                    Logger.info("%s compiled.", relativePath);
                 } catch (JCoffeeScriptCompileException e) {
-                    Logger.error("%s failed to compile.", relativePath);
+                    Logger.error("%s failed to compile.", coffeeFile.getAbsolutePath());
                 }
+                Logger.info("%s compiled.", relativePath);
             }
             Logger.info("Done. %d files compiled.", count);
         }
@@ -106,7 +145,7 @@ public class CoffeePlugin extends PlayPlugin {
             }
 
             // Compile the coffee and return.
-            String compiledCoffee = getCompiler().compile(file.contentAsString());
+            String compiledCoffee = compileCoffee(file.getRealFile());
             cache.put(relativePath, new CompiledCoffee(file.lastModified(), compiledCoffee));
             response.print(compiledCoffee);
 
