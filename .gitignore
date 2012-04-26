@@ -1,2 +1,6 @@
-dist/
-lib/play-coffee.jar
+/dist/
+/lib/play-coffee.jar
+/.classpath
+/.project
+/.settings/
+/eclipse/
