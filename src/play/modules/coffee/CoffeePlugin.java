@@ -62,7 +62,7 @@ public class CoffeePlugin extends PlayPlugin {
         return compiler.get();
     }
 
-    private String compileCoffee(File coffeeFile) throws JCoffeeScriptCompileException {
+    public String compileCoffee(File coffeeFile) throws JCoffeeScriptCompileException {
         String compiledCoffee = "";
         String coffeeNativeFullpath = Play.configuration.getProperty("coffee.native", "");
         if (!coffeeNativeFullpath.isEmpty()) {
