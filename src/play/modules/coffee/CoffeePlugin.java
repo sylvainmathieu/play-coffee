@@ -4,6 +4,7 @@ import java.io.BufferedReader;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStreamReader;
+import java.io.OutputStream;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -62,6 +63,46 @@ public class CoffeePlugin extends PlayPlugin {
         return compiler.get();
     }
 
+	public static String minifyScript(String source) {
+		String minified = "";
+		String coffeeNativeFullpath = Play.configuration.getProperty("uglifyjs.path", "");
+		if (!coffeeNativeFullpath.isEmpty()) {
+			String[] command = { coffeeNativeFullpath };
+			ProcessBuilder pb = new ProcessBuilder(command);
+			Process minifyProcess = null;
+			try {
+				minifyProcess = pb.start();
+				OutputStream os = minifyProcess.getOutputStream();
+				os.write(source.getBytes());
+				os.flush();
+				os.close();
+				BufferedReader minifyReader = new BufferedReader(new InputStreamReader(minifyProcess.getInputStream()));
+				String line;
+				while ((line = minifyReader.readLine()) != null) {
+					minified += line + "\n";
+				}
+				String coffeeErrors = "";
+				BufferedReader errorReader = new BufferedReader(new InputStreamReader(minifyProcess.getErrorStream()));
+				while ((line = errorReader.readLine()) != null) {
+					coffeeErrors += line + "\n";
+				}
+				if (!coffeeErrors.isEmpty()) {
+					Logger.error("%s", coffeeErrors);
+				}
+				minifyReader.close();
+			} catch (IOException e) {
+				e.printStackTrace();
+			} finally {
+				if (minifyProcess != null) {
+					minifyProcess.destroy();
+				}
+			}
+		} else {
+			minified = source;
+		}
+		return minified;
+	}
+
     public static String compileCoffee(File coffeeFile) throws JCoffeeScriptCompileException {
         String compiledCoffee = "";
         String coffeeNativeFullpath = Play.configuration.getProperty("coffee.native", "");
@@ -96,6 +137,9 @@ public class CoffeePlugin extends PlayPlugin {
         else {
             compiledCoffee = getCompiler().compile(IO.readContentAsString(coffeeFile));
         }
+		if (Play.mode.isProd()) {
+			compiledCoffee = minifyScript(compiledCoffee);
+		}
         return compiledCoffee;
     }
 
