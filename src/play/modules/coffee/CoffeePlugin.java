@@ -48,7 +48,6 @@ public class CoffeePlugin extends PlayPlugin {
         new ThreadLocal<JCoffeeScriptCompiler>() {
             @Override protected JCoffeeScriptCompiler initialValue() {
                 return new JCoffeeScriptCompiler(); }};
-    private Map<String, CompiledCoffee> cache;  // Map of Relative Path -> Compiled coffee
 
     /** @return the line number that the exception happened on, or 0 if not found in the message. */
     public static int getLineNumber(JCoffeeScriptCompileException e) {
@@ -143,25 +142,58 @@ public class CoffeePlugin extends PlayPlugin {
         return compiledCoffee;
     }
 
+	public File getCompiledFile(File coffeeFile) {
+
+		String relativePath = coffeeFile.getAbsolutePath()
+			.replace(Play.applicationPath.getAbsolutePath(), "")
+			.replace("/" + coffeeFile.getName(), "");
+
+		// Makes sure that the compiled directory gets created
+		String compiledFileDirPath = "tmp/coffescript_compiled/" + relativePath;
+		File compiledFileDir = Play.getFile(compiledFileDirPath);
+		if (!compiledFileDir.exists()) {
+			compiledFileDir.mkdirs();
+		}
+
+		String compiledFilePath = "tmp/coffescript_compiled/" + relativePath + "/" + coffeeFile.getName();
+
+		return Play.getFile(compiledFilePath);
+	}
+
+	@Override
+	public void onApplicationStart() {
+		if (!Play.usePrecompiled) {
+			try {
+				Logger.info("Deleting all the compiled CoffeeScript files...");
+				FileUtils.deleteDirectory(Play.getFile("tmp/coffescript_compiled"));
+			}
+			catch(IOException e) {
+				e.printStackTrace();
+			}
+		}
+	}
+
     @Override
     public void onLoad() {
-        cache = new HashMap<String, CompiledCoffee>();
 
-        if (Play.mode == Play.Mode.PROD) {
+        if (Play.mode == Play.Mode.PROD && !Play.usePrecompiled) {
+
             Logger.info("Compiling coffee scripts...");
+
             String[] extensions = new String[] { "coffee" };
             int count = 0;
             List<File> coffeeFiles = (List<File>) FileUtils.listFiles(Play.getFile("public/javascripts"), extensions, true);
             for (File coffeeFile : coffeeFiles) {
-                String relativePath = coffeeFile.getAbsolutePath().replace(Play.applicationPath.getAbsolutePath(), "");
-                count++;
                 try {
-                    String compiledCoffee = compileCoffee(coffeeFile);
-                    cache.put(relativePath, new CompiledCoffee(coffeeFile.lastModified(), compiledCoffee));
+
+					File compiledFile = getCompiledFile(coffeeFile);
+
+					IO.writeContent(compileCoffee(coffeeFile), compiledFile);
+
                 } catch (JCoffeeScriptCompileException e) {
                     Logger.error("%s failed to compile.", coffeeFile.getAbsolutePath());
                 }
-                Logger.info("%s compiled.", relativePath);
+                Logger.info("%s compiled.", coffeeFile.getAbsolutePath());
             }
             Logger.info("Done. %d files compiled.", count);
         }
@@ -180,18 +212,13 @@ public class CoffeePlugin extends PlayPlugin {
                 response.cacheFor("1h");
             }
 
-            // Check the cache.
-            String relativePath = file.relativePath();
-            CompiledCoffee cc = cache.get(relativePath);
-            if (cc != null && cc.sourceLastModified.equals(file.lastModified())) {
-                response.print(cc.output);
-                return true;
-            }
+			File compiledFile = getCompiledFile(file.getRealFile());
 
-            // Compile the coffee and return.
-            String compiledCoffee = compileCoffee(file.getRealFile());
-            cache.put(relativePath, new CompiledCoffee(file.lastModified(), compiledCoffee));
-            response.print(compiledCoffee);
+			if (!compiledFile.exists() || compiledFile.lastModified() < file.lastModified()) {
+				IO.writeContent(compileCoffee(file.getRealFile()), compiledFile);
+			}
+
+			response.print(IO.readContentAsString(compiledFile));
 
         } catch (JCoffeeScriptCompileException e) {
             // Render a nice error page.
