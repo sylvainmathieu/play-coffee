@@ -168,7 +168,6 @@ public class CoffeePlugin extends PlayPlugin {
 	public void onApplicationStart() {
 		if (!Play.usePrecompiled) {
 			try {
-				Logger.info("Deleting all the compiled CoffeeScript files...");
 				FileUtils.deleteDirectory(Play.getFile(baseCompiledDirectory));
 			}
 			catch(IOException e) {
