@@ -142,20 +142,24 @@ public class CoffeePlugin extends PlayPlugin {
         return compiledCoffee;
     }
 
+	public static final boolean precompiling = System.getProperty("precompile") != null;
+	public static final String tmpOrPrecompile = Play.usePrecompiled || precompiling ? "precompiled" : "tmp";
+	public static final String baseCompiledDirectory = tmpOrPrecompile +  "/assets/coffeescripts";
+
 	public File getCompiledFile(File coffeeFile) {
 
 		String relativePath = coffeeFile.getAbsolutePath()
 			.replace(Play.applicationPath.getAbsolutePath(), "")
 			.replace("/" + coffeeFile.getName(), "");
 
-		// Makes sure that the compiled directory gets created
-		String compiledFileDirPath = "tmp/coffescript_compiled/" + relativePath;
+		String compiledFileDirPath = baseCompiledDirectory + relativePath;
+
 		File compiledFileDir = Play.getFile(compiledFileDirPath);
 		if (!compiledFileDir.exists()) {
 			compiledFileDir.mkdirs();
 		}
 
-		String compiledFilePath = "tmp/coffescript_compiled/" + relativePath + "/" + coffeeFile.getName();
+		String compiledFilePath = compiledFileDirPath + "/" + coffeeFile.getName() + ".js";
 
 		return Play.getFile(compiledFilePath);
 	}
@@ -165,7 +169,7 @@ public class CoffeePlugin extends PlayPlugin {
 		if (!Play.usePrecompiled) {
 			try {
 				Logger.info("Deleting all the compiled CoffeeScript files...");
-				FileUtils.deleteDirectory(Play.getFile("tmp/coffescript_compiled"));
+				FileUtils.deleteDirectory(Play.getFile(baseCompiledDirectory));
 			}
 			catch(IOException e) {
 				e.printStackTrace();
