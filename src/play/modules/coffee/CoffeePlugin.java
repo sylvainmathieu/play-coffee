@@ -103,6 +103,11 @@ public class CoffeePlugin extends PlayPlugin {
 	}
 
     public static String compileCoffee(File coffeeFile) throws JCoffeeScriptCompileException {
+    	File compiledFile = getCompiledFile(coffeeFile);
+    	if (compiledFile.exists() && coffeeFile.lastModified() <= compiledFile.lastModified()) {
+    		return IO.readContentAsString(compiledFile);
+    	}
+
         String compiledCoffee = "";
         String coffeeNativeFullpath = Play.configuration.getProperty("coffee.native", "");
         if (!coffeeNativeFullpath.isEmpty()) {
@@ -136,9 +141,12 @@ public class CoffeePlugin extends PlayPlugin {
         else {
             compiledCoffee = getCompiler().compile(IO.readContentAsString(coffeeFile));
         }
-		if (Play.mode.isProd()) {
+		if (Play.mode.isProd() || precompiling) {
 			compiledCoffee = minifyScript(compiledCoffee);
 		}
+
+		IO.writeContent(compiledCoffee, compiledFile);
+
         return compiledCoffee;
     }
 
@@ -146,7 +154,7 @@ public class CoffeePlugin extends PlayPlugin {
 	public static final String tmpOrPrecompile = Play.usePrecompiled || precompiling ? "precompiled" : "tmp";
 	public static final String baseCompiledDirectory = tmpOrPrecompile +  "/assets/coffeescripts";
 
-	public File getCompiledFile(File coffeeFile) {
+	public static File getCompiledFile(File coffeeFile) {
 
 		String relativePath = coffeeFile.getAbsolutePath()
 			.replace(Play.applicationPath.getAbsolutePath(), "")
@@ -179,26 +187,20 @@ public class CoffeePlugin extends PlayPlugin {
     @Override
     public void onLoad() {
 
-        if (Play.mode == Play.Mode.PROD && !Play.usePrecompiled) {
-
+        if (!Play.usePrecompiled  && (Play.mode.isProd() || precompiling)) {
             Logger.info("Compiling coffee scripts...");
-
             String[] extensions = new String[] { "coffee" };
-            int count = 0;
             List<File> coffeeFiles = (List<File>) FileUtils.listFiles(Play.getFile("public/javascripts"), extensions, true);
             for (File coffeeFile : coffeeFiles) {
                 try {
-
 					File compiledFile = getCompiledFile(coffeeFile);
-
 					IO.writeContent(compileCoffee(coffeeFile), compiledFile);
-
                 } catch (JCoffeeScriptCompileException e) {
-                    Logger.error("%s failed to compile.", coffeeFile.getAbsolutePath());
+                    Logger.error("%s failed to compile", coffeeFile.getAbsolutePath());
                 }
-                Logger.info("%s compiled.", coffeeFile.getAbsolutePath());
+                Logger.info("%s compiled", coffeeFile.getAbsolutePath());
             }
-            Logger.info("Done. %d files compiled.", count);
+            Logger.info("Done.");
         }
     }
 
