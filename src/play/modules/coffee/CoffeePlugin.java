@@ -83,7 +83,9 @@ public class CoffeePlugin extends PlayPlugin {
 				String coffeeErrors = "";
 				BufferedReader errorReader = new BufferedReader(new InputStreamReader(minifyProcess.getErrorStream()));
 				while ((line = errorReader.readLine()) != null) {
-					coffeeErrors += line + "\n";
+					if (!line.trim().isEmpty()) {
+						coffeeErrors += line + "\n";
+					}
 				}
 				if (!coffeeErrors.isEmpty()) {
 					Logger.error("%s", coffeeErrors);
