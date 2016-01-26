@@ -32,35 +32,35 @@ import play.vfs.VirtualFile;
  */
 public class CoffeePlugin extends PlayPlugin {
 
-    private static final class CompiledCoffee {
-        public final Long sourceLastModified;  // Last modified time of the VirtualFile
-        public final String output;  // Compiled coffee
+	private static final class CompiledCoffee {
+		public final Long sourceLastModified;  // Last modified time of the VirtualFile
+		public final String output;  // Compiled coffee
 
-        public CompiledCoffee(Long sourceLastModified, String output) {
-            this.sourceLastModified = sourceLastModified;
-            this.output = output;
-        }
-    }
+		public CompiledCoffee(Long sourceLastModified, String output) {
+			this.sourceLastModified = sourceLastModified;
+			this.output = output;
+		}
+	}
 
-    // Regex to get the line number of the failure.
-    private static final Pattern LINE_NUMBER = Pattern.compile("line ([0-9]+)");
-    private static final ThreadLocal<JCoffeeScriptCompiler> compiler =
-        new ThreadLocal<JCoffeeScriptCompiler>() {
-            @Override protected JCoffeeScriptCompiler initialValue() {
-                return new JCoffeeScriptCompiler(); }};
+	// Regex to get the line number of the failure.
+	private static final Pattern LINE_NUMBER = Pattern.compile("line ([0-9]+)");
+	private static final ThreadLocal<JCoffeeScriptCompiler> compiler =
+		new ThreadLocal<JCoffeeScriptCompiler>() {
+			@Override protected JCoffeeScriptCompiler initialValue() {
+				return new JCoffeeScriptCompiler(); }};
 
-    /** @return the line number that the exception happened on, or 0 if not found in the message. */
-    public static int getLineNumber(JCoffeeScriptCompileException e) {
-        Matcher m = LINE_NUMBER.matcher(e.getMessage());
-        if (m.find()) {
-            return Integer.parseInt(m.group(1));
-        }
-        return 0;
-    }
+	/** @return the line number that the exception happened on, or 0 if not found in the message. */
+	public static int getLineNumber(JCoffeeScriptCompileException e) {
+		Matcher m = LINE_NUMBER.matcher(e.getMessage());
+		if (m.find()) {
+			return Integer.parseInt(m.group(1));
+		}
+		return 0;
+	}
 
-    public static JCoffeeScriptCompiler getCompiler() {
-        return compiler.get();
-    }
+	public static JCoffeeScriptCompiler getCompiler() {
+		return compiler.get();
+	}
 
 	public static String minifyScript(String source) {
 		String minified = "";
@@ -104,25 +104,25 @@ public class CoffeePlugin extends PlayPlugin {
 		return minified;
 	}
 
-    public static String compileCoffee(File coffeeFile) throws JCoffeeScriptCompileException {
-    	File compiledFile = getCompiledFile(coffeeFile);
-    	if (compiledFile.exists() && coffeeFile.lastModified() <= compiledFile.lastModified()) {
-    		return IO.readContentAsString(compiledFile);
-    	}
+	public static String compileCoffee(File coffeeFile) throws CoffeeScriptException, JCoffeeScriptCompileException {
+		File compiledFile = getCompiledFile(coffeeFile);
+		if (compiledFile.exists() && coffeeFile.lastModified() <= compiledFile.lastModified()) {
+				return IO.readContentAsString(compiledFile);
+		}
 
-        String compiledCoffee = "";
-        String coffeeNativeFullpath = Play.configuration.getProperty("coffee.native", "");
-        if (!coffeeNativeFullpath.isEmpty()) {
-            String[] command = { coffeeNativeFullpath, "-p", coffeeFile.getAbsolutePath() };
-            ProcessBuilder pb = new ProcessBuilder(command);
-            Process coffeeProcess = null;
-            try {
-                coffeeProcess = pb.start();
-                BufferedReader compiledReader = new BufferedReader(new InputStreamReader(coffeeProcess.getInputStream()));
-                String line;
-                while ((line = compiledReader.readLine()) != null) {
+		String compiledCoffee = "";
+		String coffeeNativeFullpath = Play.configuration.getProperty("coffee.native", "");
+		if (!coffeeNativeFullpath.isEmpty()) {
+			String[] command = { coffeeNativeFullpath, "-p", coffeeFile.getAbsolutePath() };
+			ProcessBuilder pb = new ProcessBuilder(command);
+			Process coffeeProcess = null;
+			try {
+				coffeeProcess = pb.start();
+				BufferedReader compiledReader = new BufferedReader(new InputStreamReader(coffeeProcess.getInputStream()));
+				String line;
+				while ((line = compiledReader.readLine()) != null) {
 					compiledCoffee += line + "\n";
-                }
+				}
 				String coffeeErrors = "";
 				BufferedReader errorReader = new BufferedReader(new InputStreamReader(coffeeProcess.getErrorStream()));
 				while ((line = errorReader.readLine()) != null) {
@@ -130,27 +130,28 @@ public class CoffeePlugin extends PlayPlugin {
 				}
 				if (!coffeeErrors.isEmpty()) {
 					Logger.error("%s", coffeeErrors);
+					throw new CoffeeScriptException("CoffeeScript compilation error", coffeeErrors);
 				}
-                compiledReader.close();
-            } catch (IOException e) {
-                e.printStackTrace();
-            } finally {
-                if (coffeeProcess != null) {
-                    coffeeProcess.destroy();
-                }
-            }
-        }
-        else {
-            compiledCoffee = getCompiler().compile(IO.readContentAsString(coffeeFile));
-        }
+				compiledReader.close();
+			} catch (IOException e) {
+				throw new RuntimeException(e);
+			} finally {
+				if (coffeeProcess != null) {
+					coffeeProcess.destroy();
+				}
+			}
+		}
+		else {
+		    compiledCoffee = getCompiler().compile(IO.readContentAsString(coffeeFile));
+		}
 		if (Play.mode.isProd() || precompiling) {
 			compiledCoffee = minifyScript(compiledCoffee);
 		}
 
 		IO.writeContent(compiledCoffee, compiledFile);
 
-        return compiledCoffee;
-    }
+		return compiledCoffee;
+	}
 
 	public static final boolean precompiling = System.getProperty("precompile") != null;
 	public static final String tmpOrPrecompile = Play.usePrecompiled || precompiling ? "precompiled" : "tmp";
@@ -186,38 +187,38 @@ public class CoffeePlugin extends PlayPlugin {
 		}
 	}
 
-    @Override
-    public void onLoad() {
+	@Override
+	public void onLoad() {
 
-        if (!Play.usePrecompiled  && (Play.mode.isProd() || precompiling)) {
-            Logger.info("Compiling coffee scripts...");
-            String[] extensions = new String[] { "coffee" };
-            List<File> coffeeFiles = (List<File>) FileUtils.listFiles(Play.getFile("public/javascripts"), extensions, true);
-            for (File coffeeFile : coffeeFiles) {
-                try {
+		if (!Play.usePrecompiled  && (Play.mode.isProd() || precompiling)) {
+			Logger.info("Compiling coffee scripts...");
+			String[] extensions = new String[] { "coffee" };
+			List<File> coffeeFiles = (List<File>) FileUtils.listFiles(Play.getFile("public/javascripts"), extensions, true);
+			for (File coffeeFile : coffeeFiles) {
+				try {
 					File compiledFile = getCompiledFile(coffeeFile);
 					IO.writeContent(compileCoffee(coffeeFile), compiledFile);
-                } catch (JCoffeeScriptCompileException e) {
-                    Logger.error("%s failed to compile", coffeeFile.getAbsolutePath());
-                }
-                Logger.info("%s compiled", coffeeFile.getAbsolutePath());
-            }
-            Logger.info("Done.");
-        }
-    }
+				} catch (JCoffeeScriptCompileException e) {
+					Logger.error("%s failed to compile", coffeeFile.getAbsolutePath());
+				}
+				Logger.info("%s compiled", coffeeFile.getAbsolutePath());
+				
+			Logger.info("Done.");
+		}
+	}
 
-    @Override
-    public boolean serveStatic(VirtualFile file, Request request, Response response) {
-        if (!file.getName().endsWith(".coffee")) {
-            return super.serveStatic(file, request, response);
-        }
+	@Override
+	public boolean serveStatic(VirtualFile file, Request request, Response response) {
+		if (!file.getName().endsWith(".coffee")) {
+			return super.serveStatic(file, request, response);
+		}
 
-        try {
-            response.contentType = "text/javascript";
-            response.status = 200;
-            if (Play.mode == Play.Mode.PROD) {
-                response.cacheFor("1h");
-            }
+		try {
+			response.contentType = "text/javascript";
+			response.status = 200;
+			if (Play.mode == Play.Mode.PROD) {
+				response.cacheFor("1h");
+			}
 
 			File compiledFile = getCompiledFile(file.getRealFile());
 
@@ -227,18 +228,18 @@ public class CoffeePlugin extends PlayPlugin {
 
 			response.print(IO.readContentAsString(compiledFile));
 
-        } catch (JCoffeeScriptCompileException e) {
-            // Render a nice error page.
-            Template tmpl = TemplateLoader.load("errors/500.html");
-            Map<String, Object> args = new HashMap<String, Object>();
-            Exception ex = new CompilationException(file, e.getMessage(), getLineNumber(e), -1, -1);
-            args.put("exception", ex);
-            play.Logger.error(ex, "Coffee compilation error");
-            response.contentType = "text/html";
-            response.status = 500;
-            response.print(tmpl.render(args));
-        }
+		} catch (JCoffeeScriptCompileException e) {
+			// Render a nice error page.
+			Template tmpl = TemplateLoader.load("errors/500.html");
+			Map<String, Object> args = new HashMap<String, Object>();
+			Exception ex = new CompilationException(file, e.getMessage(), getLineNumber(e), -1, -1);
+			args.put("exception", ex);
+			play.Logger.error(ex, "Coffee compilation error");
+			response.contentType = "text/html";
+			response.status = 500;
+			response.print(tmpl.render(args));
+		}
 
-        return true;
-    }
+		return true;
+	}
 }
